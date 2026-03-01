@@ -1,10 +1,10 @@
 <?php
 /**
- * Plugin Name: WooCommerce OneDigit Pay
+ * Plugin Name: WooCommerce OneDigitPay
  * Plugin URI: https://business.onedigitpay.com
- * Description: Extends WooCommerce with OneDigit Pay gateway. Customers are redirected to the OneDigit Pay checkout page to complete payment.
- * Version: 0.0.2
- * Author: OneDigit Pay
+ * Description: Extends WooCommerce with OneDigitPay gateway. Customers are redirected to the OneDigitPay checkout page to complete payment.
+ * Version: 0.1.0
+ * Author: OneDigitPay
  * Author URI: https://onedigitpay.com
  * License: GPL v3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -61,7 +61,7 @@ function onedigitpay_woocommerce_add_gateway( $methods ) {
 }
 
 /**
- * Handle return from OneDigit Pay (WC-API callback).
+ * Handle return from OneDigitPay (WC-API callback).
  */
 function onedigitpay_woocommerce_handle_return() {
 	$gateway = new WC_Gateway_OneDigitPay();
