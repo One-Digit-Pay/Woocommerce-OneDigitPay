@@ -5,7 +5,7 @@
  * Handles POST create checkout session and GET session status using wp_remote_*.
  *
  * @package OneDigitPay_WooCommerce
- * @since 1.0.0
+ * @since 0.0.2
  */
 
 defined( 'ABSPATH' ) || exit;

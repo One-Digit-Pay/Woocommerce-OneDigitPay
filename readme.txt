@@ -5,7 +5,7 @@ Tags: woocommerce, payment gateway, onedigit pay, nigeria, ngn
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 0.0.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -44,7 +44,10 @@ For technical support or questions about OneDigit Pay:
 
 == Changelog ==
 
-= 1.0.0 =
+= 0.0.2 =
+* Update.
+
+= 0.0.1 =
 * Initial release.
 * Create checkout session and redirect to OneDigit Pay.
 * Return URL handler to verify payment status and complete order.

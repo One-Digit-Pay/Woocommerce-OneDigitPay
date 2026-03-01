@@ -5,7 +5,7 @@
  * Redirects customer to OneDigitPay hosted checkout; on return, verifies session status and completes order.
  *
  * @package OneDigitPay_WooCommerce
- * @since 1.0.0
+ * @since 0.0.2
  */
 
 defined( 'ABSPATH' ) || exit;
