@@ -78,11 +78,19 @@ function onedigitpay_woocommerce_enqueue_inline_sdk() {
 		return;
 	}
 
-	$sdk_url  = $gateway->get_option( 'sdk_url', 'https://cdn.onedigitpay.com/checkout.js' );
+	$default_sdk_url = 'https://cdn.onedigitpay.com/checkout.v1.js';
+	$sdk_url         = $gateway->get_option( 'sdk_url', $default_sdk_url );
+
+	// Validate SDK URL: must be a valid https:// URL.
+	$sdk_url = esc_url( $sdk_url, array( 'https' ) );
+	if ( empty( $sdk_url ) ) {
+		$sdk_url = $default_sdk_url;
+	}
+
 	$ajax_url = admin_url( 'admin-ajax.php' );
 
-	// Load the OneDigitPay SDK.
-	wp_enqueue_script( 'onedigitpay-sdk', $sdk_url, array(), null, true );
+	// Load the OneDigitPay SDK (depends on jQuery for the integration script).
+	wp_enqueue_script( 'onedigitpay-sdk', $sdk_url, array( 'jquery' ), null, true );
 
 	// Inline JS that intercepts the WooCommerce checkout response and opens the popup.
 	$inline_js = "
@@ -108,7 +116,7 @@ function onedigitpay_woocommerce_enqueue_inline_sdk() {
 				// WC will try to redirect to empty string; override xhr response.
 			}
 
-			// Open the OneDigitPay popup.
+			// Open the OneDigitPay popup, or fall back to redirect if SDK failed to load.
 			if (typeof OneDigitPay !== 'undefined' && typeof OneDigitPay.open === 'function') {
 				OneDigitPay.open({
 					sessionId: data.odp_session_id,
@@ -123,6 +131,11 @@ function onedigitpay_woocommerce_enqueue_inline_sdk() {
 						console.error('OneDigitPay error:', err);
 					}
 				});
+			} else {
+				// SDK not available (CDN blocked, CSP, ad-blocker, etc.) — fall back to redirect mode.
+				if (data.odp_pending_url) {
+					window.location.href = data.odp_pending_url;
+				}
 			}
 		});
 	})();

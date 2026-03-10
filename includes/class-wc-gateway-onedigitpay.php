@@ -178,7 +178,7 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 			return array( 'result' => 'failure' );
 		}
 
-		if ( empty( $result['success'] ) || empty( $result['checkout_url'] ) ) {
+	if ( empty( $result['success'] ) || empty( $result['checkout_url'] ) || empty( $result['session_id'] ) ) {
 			wc_add_notice( __( 'Payment could not be started. Please try again or use another method.', 'onedigitpay-woocommerce' ), 'error' );
 			return array( 'result' => 'failure' );
 		}
@@ -192,7 +192,17 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 
 		$payment_mode = $this->get_option( 'payment_mode', 'redirect' );
 
-		if ( 'inline' === $payment_mode ) {
+	if ( 'inline' === $payment_mode ) {
+			// Build the redirect-mode pending URL as a fallback if the SDK fails to load.
+			$pending_fallback_url = add_query_arg(
+				array(
+					'wc-api'    => 'odp_payment_pending',
+					'order_id'  => $order->get_id(),
+					'order_key' => $order->get_order_key(),
+				),
+				home_url( '/' )
+			);
+
 			// Inline mode: return session ID so checkout JS can open the popup.
 			return array(
 				'result'               => 'success',
@@ -201,6 +211,7 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 				'odp_session_id'       => $result['session_id'],
 				'odp_api_base'         => $api_base,
 				'odp_thank_you_url'    => $this->get_return_url( $order ),
+				'odp_pending_url'      => $pending_fallback_url,
 				'odp_order_id'         => $order->get_id(),
 				'odp_order_key'        => $order->get_order_key(),
 			);
