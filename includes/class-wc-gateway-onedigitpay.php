@@ -21,6 +21,11 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 	const META_SESSION_ID = '_onedigitpay_session_id';
 
 	/**
+	 * Order meta key for OneDigitPay checkout URL.
+	 */
+	const META_CHECKOUT_URL = '_onedigitpay_checkout_url';
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -161,15 +166,265 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 		}
 
 		$order->update_meta_data( self::META_SESSION_ID, $result['session_id'] );
+		$order->update_meta_data( self::META_CHECKOUT_URL, $result['checkout_url'] );
 		$order->set_status( 'on-hold', __( 'Awaiting OneDigitPay payment.', 'onedigitpay-woocommerce' ) );
 		$order->save();
 
 		WC()->cart->empty_cart();
 
+		// Redirect to store-hosted payment-pending page instead of off-site checkout.
+		$pending_url = add_query_arg(
+			array(
+				'wc-api'    => 'odp_payment_pending',
+				'order_id'  => $order->get_id(),
+				'order_key' => $order->get_order_key(),
+			),
+			home_url( '/' )
+		);
+
 		return array(
 			'result'   => 'success',
-			'redirect' => $result['checkout_url'],
+			'redirect' => $pending_url,
 		);
+	}
+
+	/**
+	 * Render the payment-pending page (wc-api=odp_payment_pending).
+	 *
+	 * Shows a "Pay Now" button that opens OneDigitPay checkout in a new tab,
+	 * while polling the AJAX endpoint for payment status.
+	 */
+	public function render_payment_pending_page() {
+		$order_id  = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+		$order_key = isset( $_GET['order_key'] ) ? sanitize_text_field( wp_unslash( $_GET['order_key'] ) ) : '';
+
+		if ( ! $order_id || ! $order_key ) {
+			wp_safe_redirect( wc_get_checkout_url() );
+			exit;
+		}
+
+		$order = wc_get_order( $order_id );
+		if ( ! $order || $order->get_order_key() !== $order_key ) {
+			wp_safe_redirect( wc_get_checkout_url() );
+			exit;
+		}
+
+		// Already paid — go straight to thank-you.
+		if ( $order->is_paid() ) {
+			wp_safe_redirect( $this->get_return_url( $order ) );
+			exit;
+		}
+
+		$checkout_url = $order->get_meta( self::META_CHECKOUT_URL );
+		$thank_you    = $this->get_return_url( $order );
+		$ajax_url     = admin_url( 'admin-ajax.php' );
+		$amount       = $order->get_formatted_order_total();
+		$order_number = $order->get_order_number();
+
+		// Render a self-contained HTML page using the active theme's header/footer.
+		get_header();
+		?>
+		<style>
+			.odp-pending-wrap {
+				max-width: 520px;
+				margin: 60px auto;
+				text-align: center;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+			}
+			.odp-pending-wrap h2 { margin-bottom: 8px; }
+			.odp-pending-wrap .odp-order-info { color: #555; margin-bottom: 24px; }
+			.odp-pending-wrap .odp-pay-btn {
+				display: inline-block;
+				background: #a00;
+				color: #fff;
+				padding: 14px 36px;
+				border: none;
+				border-radius: 6px;
+				font-size: 16px;
+				cursor: pointer;
+				text-decoration: none;
+				transition: background 0.2s;
+			}
+			.odp-pending-wrap .odp-pay-btn:hover { background: #800; }
+			.odp-pending-wrap .odp-status {
+				margin-top: 20px;
+				padding: 12px;
+				border-radius: 6px;
+				font-size: 14px;
+			}
+			.odp-status-polling { background: #eef6ff; color: #1a6dbf; }
+			.odp-status-completed { background: #eaffea; color: #1a7a1a; }
+			.odp-status-failed { background: #ffeeee; color: #a00; }
+			.odp-spinner {
+				display: inline-block;
+				width: 48px; height: 48px;
+				border: 4px solid #ddd;
+				border-top-color: #a00;
+				border-radius: 50%;
+				animation: odp-spin 0.8s linear infinite;
+				margin-bottom: 16px;
+			}
+			@keyframes odp-spin { to { transform: rotate(360deg); } }
+		</style>
+
+		<div class="odp-pending-wrap">
+			<div class="odp-spinner" id="odp-spinner"></div>
+			<h2 id="odp-heading"><?php esc_html_e( 'Order Placed Successfully', 'onedigitpay-woocommerce' ); ?></h2>
+			<p class="odp-order-info">
+				<?php
+				printf(
+					/* translators: 1: order number, 2: formatted total */
+					esc_html__( 'Order #%1$s — Total: %2$s', 'onedigitpay-woocommerce' ),
+					esc_html( $order_number ),
+					wp_kses_post( $amount )
+				);
+				?>
+			</p>
+			<p><?php esc_html_e( 'Click the button below to complete your payment.', 'onedigitpay-woocommerce' ); ?></p>
+
+			<?php if ( ! empty( $checkout_url ) ) : ?>
+				<button class="odp-pay-btn" id="odp-pay-btn"><?php esc_html_e( 'Pay Now', 'onedigitpay-woocommerce' ); ?></button>
+			<?php else : ?>
+				<p style="color:#a00;"><?php esc_html_e( 'Payment link is no longer available. Please contact the store.', 'onedigitpay-woocommerce' ); ?></p>
+			<?php endif; ?>
+
+			<div class="odp-status" id="odp-status" style="display:none;"></div>
+		</div>
+
+		<script>
+		(function() {
+			var checkoutUrl = <?php echo wp_json_encode( $checkout_url ); ?>;
+			var ajaxUrl     = <?php echo wp_json_encode( $ajax_url ); ?>;
+			var orderId     = <?php echo (int) $order_id; ?>;
+			var orderKey    = <?php echo wp_json_encode( $order_key ); ?>;
+			var thankYou    = <?php echo wp_json_encode( $thank_you ); ?>;
+			var pollTimer   = null;
+			var stopTimer   = null;
+
+			var btn     = document.getElementById('odp-pay-btn');
+			var status  = document.getElementById('odp-status');
+			var heading = document.getElementById('odp-heading');
+			var spinner = document.getElementById('odp-spinner');
+
+			if (btn) {
+				btn.addEventListener('click', function() {
+					window.open(checkoutUrl, '_blank');
+					startPolling();
+				});
+			}
+
+			function startPolling() {
+				if (pollTimer) return;
+				status.style.display = 'block';
+				status.className = 'odp-status odp-status-polling';
+				status.textContent = '<?php echo esc_js( __( 'Checking payment status…', 'onedigitpay-woocommerce' ) ); ?>';
+
+				pollTimer = setInterval(checkStatus, 7000);
+				checkStatus(); // first check immediately
+
+				// Stop polling after 10 minutes.
+				stopTimer = setTimeout(function() {
+					clearInterval(pollTimer);
+					pollTimer = null;
+					status.textContent = '<?php echo esc_js( __( 'Status check timed out. Please refresh the page or check your orders.', 'onedigitpay-woocommerce' ) ); ?>';
+				}, 600000);
+			}
+
+			function checkStatus() {
+				var body = new FormData();
+				body.append('action', 'odp_check_status');
+				body.append('order_id', orderId);
+				body.append('order_key', orderKey);
+
+				fetch(ajaxUrl, { method: 'POST', body: body })
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						if (!data || !data.success) return;
+
+						if (data.status === 'completed') {
+							clearInterval(pollTimer);
+							clearTimeout(stopTimer);
+							spinner.style.borderTopColor = '#1a7a1a';
+							heading.textContent = '<?php echo esc_js( __( 'Payment Successful!', 'onedigitpay-woocommerce' ) ); ?>';
+							status.className = 'odp-status odp-status-completed';
+							status.textContent = '<?php echo esc_js( __( 'Redirecting to your order…', 'onedigitpay-woocommerce' ) ); ?>';
+							if (btn) btn.style.display = 'none';
+							setTimeout(function() { window.location.href = thankYou; }, 2000);
+						} else if (data.status === 'failed') {
+							clearInterval(pollTimer);
+							clearTimeout(stopTimer);
+							spinner.style.display = 'none';
+							heading.textContent = '<?php echo esc_js( __( 'Payment Failed', 'onedigitpay-woocommerce' ) ); ?>';
+							status.className = 'odp-status odp-status-failed';
+							status.textContent = '<?php echo esc_js( __( 'Your payment was not successful. You can try again.', 'onedigitpay-woocommerce' ) ); ?>';
+							if (btn) btn.textContent = '<?php echo esc_js( __( 'Try Again', 'onedigitpay-woocommerce' ) ); ?>';
+						}
+					})
+					.catch(function() {});
+			}
+		})();
+		</script>
+		<?php
+		get_footer();
+		exit;
+	}
+
+	/**
+	 * AJAX handler: check payment status for a given order.
+	 *
+	 * Accepts order_id + order_key for auth (supports guest checkout).
+	 * Returns JSON: { success: bool, status: 'pending'|'completed'|'failed' }
+	 */
+	public static function ajax_check_payment_status() {
+		$order_id  = isset( $_POST['order_id'] ) ? absint( $_POST['order_id'] ) : 0;
+		$order_key = isset( $_POST['order_key'] ) ? sanitize_text_field( wp_unslash( $_POST['order_key'] ) ) : '';
+
+		if ( ! $order_id || ! $order_key ) {
+			wp_send_json( array( 'success' => false, 'status' => 'error' ) );
+		}
+
+		$order = wc_get_order( $order_id );
+		if ( ! $order || $order->get_order_key() !== $order_key ) {
+			wp_send_json( array( 'success' => false, 'status' => 'error' ) );
+		}
+
+		// Already completed.
+		if ( $order->is_paid() ) {
+			wp_send_json( array( 'success' => true, 'status' => 'completed' ) );
+		}
+
+		// Already failed.
+		if ( $order->has_status( 'failed' ) ) {
+			wp_send_json( array( 'success' => true, 'status' => 'failed' ) );
+		}
+
+		$session_id = $order->get_meta( self::META_SESSION_ID );
+		if ( empty( $session_id ) ) {
+			wp_send_json( array( 'success' => false, 'status' => 'error' ) );
+		}
+
+		$gateway = new self();
+		$api     = new WC_OneDigitPay_API( $gateway->get_option( 'api_base' ), $gateway->get_option( 'merchant_token' ) );
+		$result  = $api->get_session_status( $session_id );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json( array( 'success' => true, 'status' => 'pending' ) );
+		}
+
+		$api_status = isset( $result['status'] ) ? $result['status'] : '';
+
+		if ( ! empty( $result['success'] ) && $api_status === 'COMPLETED' ) {
+			$order->payment_complete();
+			$order->add_order_note( __( 'Payment completed via OneDigitPay.', 'onedigitpay-woocommerce' ) );
+			wp_send_json( array( 'success' => true, 'status' => 'completed' ) );
+		}
+
+		if ( in_array( $api_status, array( 'FAILED', 'EXPIRED', 'CANCELLED' ), true ) ) {
+			$order->update_status( 'failed', __( 'OneDigitPay payment did not complete.', 'onedigitpay-woocommerce' ) );
+			wp_send_json( array( 'success' => true, 'status' => 'failed' ) );
+		}
+
+		wp_send_json( array( 'success' => true, 'status' => 'pending' ) );
 	}
 
 	/**

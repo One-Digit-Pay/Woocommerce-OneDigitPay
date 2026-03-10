@@ -115,6 +115,15 @@ class WC_OneDigitPay_API {
 		$body_raw = wp_remote_retrieve_body( $response );
 		$data     = json_decode( $body_raw, true );
 
+		// Edge case: OneDigitPay returns HTTP 400 with "Session status is completed" for already-completed sessions.
+		if ( $code === 400 && isset( $data['msg'] ) && stripos( $data['msg'], 'Session status is completed' ) !== false ) {
+			return array(
+				'success'      => true,
+				'status'       => 'COMPLETED',
+				'session_data' => isset( $data['data']['session'] ) ? $data['data']['session'] : array(),
+			);
+		}
+
 		if ( $code !== 200 ) {
 			$message = isset( $data['msg'] ) ? $data['msg'] : __( 'Failed to check payment status.', 'onedigitpay-woocommerce' );
 			return new WP_Error( 'onedigitpay_api_error', $message, array( 'status_code' => $code, 'response' => $data ) );

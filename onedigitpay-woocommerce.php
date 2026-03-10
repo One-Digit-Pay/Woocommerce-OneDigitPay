@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce OneDigitPay
  * Plugin URI: https://business.onedigitpay.com
  * Description: Extends WooCommerce with OneDigitPay gateway. Customers are redirected to the OneDigitPay checkout page to complete payment.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Author: OneDigitPay
  * Author URI: https://onedigitpay.com
  * License: GPL v3 or later
@@ -44,9 +44,22 @@ function onedigitpay_woocommerce_init() {
 
 	require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-api.php';
 	require_once dirname( __FILE__ ) . '/includes/class-wc-gateway-onedigitpay.php';
+	require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-cron.php';
 
 	add_filter( 'woocommerce_payment_gateways', 'onedigitpay_woocommerce_add_gateway' );
+
+	// WC-API callback: customer returns from OneDigitPay after payment.
 	add_action( 'woocommerce_api_wc_gateway_onedigitpay', 'onedigitpay_woocommerce_handle_return' );
+
+	// WC-API callback: render the payment-pending page.
+	add_action( 'woocommerce_api_odp_payment_pending', 'onedigitpay_woocommerce_payment_pending' );
+
+	// AJAX: client-side polling for payment status (logged-in and guest).
+	add_action( 'wp_ajax_odp_check_status', array( 'WC_Gateway_OneDigitPay', 'ajax_check_payment_status' ) );
+	add_action( 'wp_ajax_nopriv_odp_check_status', array( 'WC_Gateway_OneDigitPay', 'ajax_check_payment_status' ) );
+
+	// Background cron: poll pending orders every 5 minutes.
+	WC_OneDigitPay_Cron::init();
 }
 
 /**
@@ -67,3 +80,17 @@ function onedigitpay_woocommerce_handle_return() {
 	$gateway = new WC_Gateway_OneDigitPay();
 	$gateway->handle_return();
 }
+
+/**
+ * Render the payment-pending page (WC-API callback).
+ */
+function onedigitpay_woocommerce_payment_pending() {
+	$gateway = new WC_Gateway_OneDigitPay();
+	$gateway->render_payment_pending_page();
+}
+
+/*
+ * Activation / deactivation hooks for cron scheduling.
+ */
+register_activation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'schedule' ) );
+register_deactivation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'unschedule' ) );
