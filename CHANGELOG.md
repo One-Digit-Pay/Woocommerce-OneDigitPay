@@ -1,5 +1,10 @@
 ## WooCommerce OneDigitPay – Changelog
 
+### 0.3.0
+- Introduced 'payment_mode' setting to choose between 'redirect' and 'inline' options for checkout.
+- Implemented inline SDK loading on the checkout page when inline mode is active.
+- Enhanced AJAX response handling to open OneDigitPay popup for inline payments without redirecting.
+
 ### 0.2.1
 - **Store-hosted payment pending page** with a “Pay Now” button that opens OneDigitPay checkout in a new tab.
 - **AJAX polling endpoint** (`odp_check_status`) to automatically detect when payment is completed or failed, including for guest checkouts.

@@ -83,6 +83,24 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 				'default'     => 'https://prod-api-business.onedigitpay.com/api/v1',
 				'desc_tip'    => true,
 			),
+			'payment_mode'   => array(
+				'title'       => __( 'Payment Mode', 'onedigitpay-woocommerce' ),
+				'type'        => 'select',
+				'description' => __( 'Redirect: opens a payment-pending page then new tab. Inline: opens a popup overlay on the checkout page.', 'onedigitpay-woocommerce' ),
+				'default'     => 'redirect',
+				'desc_tip'    => true,
+				'options'     => array(
+					'redirect' => __( 'Redirect (new tab)', 'onedigitpay-woocommerce' ),
+					'inline'   => __( 'Inline (popup)', 'onedigitpay-woocommerce' ),
+				),
+			),
+			'sdk_url'        => array(
+				'title'       => __( 'Checkout SDK URL', 'onedigitpay-woocommerce' ),
+				'type'        => 'text',
+				'description' => __( 'URL to the OneDigitPay checkout.js SDK. Only used in Inline mode.', 'onedigitpay-woocommerce' ),
+				'default'     => 'https://cdn.onedigitpay.com/checkout.v1.js',
+				'desc_tip'    => true,
+			),
 		);
 	}
 
@@ -160,7 +178,7 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 			return array( 'result' => 'failure' );
 		}
 
-		if ( empty( $result['success'] ) || empty( $result['checkout_url'] ) ) {
+	if ( empty( $result['success'] ) || empty( $result['checkout_url'] ) || empty( $result['session_id'] ) ) {
 			wc_add_notice( __( 'Payment could not be started. Please try again or use another method.', 'onedigitpay-woocommerce' ), 'error' );
 			return array( 'result' => 'failure' );
 		}
@@ -172,7 +190,34 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 
 		WC()->cart->empty_cart();
 
-		// Redirect to store-hosted payment-pending page instead of off-site checkout.
+		$payment_mode = $this->get_option( 'payment_mode', 'redirect' );
+
+	if ( 'inline' === $payment_mode ) {
+			// Build the redirect-mode pending URL as a fallback if the SDK fails to load.
+			$pending_fallback_url = add_query_arg(
+				array(
+					'wc-api'    => 'odp_payment_pending',
+					'order_id'  => $order->get_id(),
+					'order_key' => $order->get_order_key(),
+				),
+				home_url( '/' )
+			);
+
+			// Inline mode: return session ID so checkout JS can open the popup.
+			return array(
+				'result'               => 'success',
+				'redirect'             => false,
+				'odp_inline'           => true,
+				'odp_session_id'       => $result['session_id'],
+				'odp_api_base'         => $api_base,
+				'odp_thank_you_url'    => $this->get_return_url( $order ),
+				'odp_pending_url'      => $pending_fallback_url,
+				'odp_order_id'         => $order->get_id(),
+				'odp_order_key'        => $order->get_order_key(),
+			);
+		}
+
+		// Redirect mode: send to store-hosted payment-pending page.
 		$pending_url = add_query_arg(
 			array(
 				'wc-api'    => 'odp_payment_pending',

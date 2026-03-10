@@ -80,10 +80,15 @@ class WC_OneDigitPay_API {
 			return new WP_Error( 'onedigitpay_api_error', __( 'Invalid response from payment provider.', 'onedigitpay-woocommerce' ), array( 'response' => $data ) );
 		}
 
-		$session = $data['data']['session'];
+	$session = $data['data']['session'];
+
+		if ( empty( $session['session_id'] ) ) {
+			return new WP_Error( 'onedigitpay_api_error', __( 'Payment provider returned an empty session ID.', 'onedigitpay-woocommerce' ), array( 'response' => $data ) );
+		}
+
 		return array(
 			'success'      => true,
-			'session_id'   => isset( $session['session_id'] ) ? $session['session_id'] : '',
+			'session_id'   => $session['session_id'],
 			'checkout_url' => $session['checkout_url'],
 			'order_id'     => isset( $session['order_id'] ) ? $session['order_id'] : '',
 		);
