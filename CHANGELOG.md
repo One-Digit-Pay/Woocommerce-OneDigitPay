@@ -1,5 +1,8 @@
 ## WooCommerce OneDigitPay – Changelog
 
+### 0.3.4
+- Fix fatal error on activation when `WC_OneDigitPay_Cron` was not loaded before the activation hook (load cron class inside activation/deactivation callbacks).
+
 ### 0.3.3
 - Fix fatal error on plugin activation by ensuring the `WC_OneDigitPay_Cron` class is loaded before activation/deactivation hooks run.
 
