@@ -5,7 +5,7 @@ Tags: woocommerce, payment gateway, onedigitpay, nigeria, ngn
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -43,6 +43,9 @@ For technical support or questions about OneDigitPay:
 * Status: https://status.onedigitpay.com
 
 == Changelog ==
+
+= 0.3.1 =
+* Fix fatal error on plugin activation by ensuring the `WC_OneDigitPay_Cron` class is loaded before activation/deactivation hooks run.
 
 = 0.3.0 =
 * Introduced 'payment_mode' setting to choose between 'redirect' and 'inline' options for checkout.

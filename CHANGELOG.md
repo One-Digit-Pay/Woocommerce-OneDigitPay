@@ -1,5 +1,8 @@
 ## WooCommerce OneDigitPay – Changelog
 
+### 0.3.1
+- Fix fatal error on plugin activation by ensuring the `WC_OneDigitPay_Cron` class is loaded before activation/deactivation hooks run.
+
 ### 0.3.0
 - Introduced 'payment_mode' setting to choose between 'redirect' and 'inline' options for checkout.
 - Implemented inline SDK loading on the checkout page when inline mode is active.
