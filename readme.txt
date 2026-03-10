@@ -5,7 +5,7 @@ Tags: woocommerce, payment gateway, onedigitpay, nigeria, ngn
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.2.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -43,6 +43,12 @@ For technical support or questions about OneDigitPay:
 * Status: https://status.onedigitpay.com
 
 == Changelog ==
+
+= 0.2.1 =
+* Add store-hosted “payment pending” page with Pay Now button that opens OneDigitPay checkout in a new tab.
+* Add AJAX polling endpoint to automatically detect when payment is completed or failed (supports guests).
+* Add background WP-Cron job to periodically check on-hold OneDigitPay orders and update their status.
+* Handle OneDigitPay edge case where an already-completed session returns HTTP 400 with “Session status is completed”.
 
 = 0.1.0 =
 * Update.

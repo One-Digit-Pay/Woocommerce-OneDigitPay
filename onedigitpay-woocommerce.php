@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce OneDigitPay
  * Plugin URI: https://business.onedigitpay.com
  * Description: Extends WooCommerce with OneDigitPay gateway. Customers are redirected to the OneDigitPay checkout page to complete payment.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: OneDigitPay
  * Author URI: https://onedigitpay.com
  * License: GPL v3 or later
