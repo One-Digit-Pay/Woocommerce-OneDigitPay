@@ -86,11 +86,12 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 			'payment_mode'   => array(
 				'title'       => __( 'Payment Mode', 'onedigitpay-woocommerce' ),
 				'type'        => 'select',
-				'description' => __( 'Redirect: opens a payment-pending page then new tab. Inline: opens a popup overlay on the checkout page.', 'onedigitpay-woocommerce' ),
+				'description' => __( 'Redirect: payment-pending page then new tab. Direct: same page, opens OneDigitPay in the same window. Inline: popup on checkout.', 'onedigitpay-woocommerce' ),
 				'default'     => 'redirect',
 				'desc_tip'    => true,
 				'options'     => array(
 					'redirect' => __( 'Redirect (new tab)', 'onedigitpay-woocommerce' ),
+					'direct'   => __( 'Direct (same window)', 'onedigitpay-woocommerce' ),
 					'inline'   => __( 'Inline (popup)', 'onedigitpay-woocommerce' ),
 				),
 			),
@@ -260,11 +261,13 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 			exit;
 		}
 
-		$checkout_url = $order->get_meta( self::META_CHECKOUT_URL );
+		$checkout_url  = $order->get_meta( self::META_CHECKOUT_URL );
 		$thank_you    = $this->get_return_url( $order );
 		$ajax_url     = admin_url( 'admin-ajax.php' );
 		$amount       = $order->get_formatted_order_total();
 		$order_number = $order->get_order_number();
+		$payment_mode = $this->get_option( 'payment_mode', 'redirect' );
+		$is_direct    = ( 'direct' === $payment_mode );
 
 		// Render a self-contained HTML page using the active theme's header/footer.
 		get_header();
@@ -343,6 +346,7 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 			var orderId     = <?php echo (int) $order_id; ?>;
 			var orderKey    = <?php echo wp_json_encode( $order_key ); ?>;
 			var thankYou    = <?php echo wp_json_encode( $thank_you ); ?>;
+			var isDirect    = <?php echo $is_direct ? 'true' : 'false'; ?>;
 			var pollTimer   = null;
 			var stopTimer   = null;
 
@@ -353,7 +357,11 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 
 			if (btn) {
 				btn.addEventListener('click', function() {
-					window.open(checkoutUrl, '_blank');
+					if (isDirect) {
+						window.location.href = checkoutUrl;
+					} else {
+						window.open(checkoutUrl, '_blank');
+					}
 					startPolling();
 				});
 			}
