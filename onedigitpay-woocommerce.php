@@ -174,5 +174,6 @@ function onedigitpay_woocommerce_payment_pending() {
 /*
  * Activation / deactivation hooks for cron scheduling.
  */
+require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-cron.php';
 register_activation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'schedule' ) );
 register_deactivation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'unschedule' ) );
