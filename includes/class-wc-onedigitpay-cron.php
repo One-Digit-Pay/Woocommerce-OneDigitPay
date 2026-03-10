@@ -74,7 +74,6 @@ class WC_OneDigitPay_Cron {
 
 		$api = new WC_OneDigitPay_API( $api_base, $token );
 
-		// Use a Unix timestamp so WooCommerce interprets it in UTC unambiguously.
 		$cutoff = time() - self::MAX_ORDER_AGE;
 
 		$orders = wc_get_orders( array(
