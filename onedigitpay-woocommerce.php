@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce OneDigitPay
  * Plugin URI: https://business.onedigitpay.com
  * Description: Extends WooCommerce with OneDigitPay gateway. Customers are redirected to the OneDigitPay checkout page to complete payment.
- * Version: 0.3.0
+ * Version: 0.3.4
  * Author: OneDigitPay
  * Author URI: https://onedigitpay.com
  * License: GPL v3 or later
@@ -174,5 +174,31 @@ function onedigitpay_woocommerce_payment_pending() {
 /*
  * Activation / deactivation hooks for cron scheduling.
  */
-register_activation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'schedule' ) );
-register_deactivation_hook( __FILE__, array( 'WC_OneDigitPay_Cron', 'unschedule' ) );
+require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-cron.php';
+
+/**
+ * Activation callback.
+ */
+function onedigitpay_woocommerce_activate() {
+	if ( ! class_exists( 'WC_OneDigitPay_Cron' ) ) {
+		require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-cron.php';
+	}
+	if ( class_exists( 'WC_OneDigitPay_Cron' ) ) {
+		WC_OneDigitPay_Cron::schedule();
+	}
+}
+
+/**
+ * Deactivation callback.
+ */
+function onedigitpay_woocommerce_deactivate() {
+	if ( ! class_exists( 'WC_OneDigitPay_Cron' ) ) {
+		require_once dirname( __FILE__ ) . '/includes/class-wc-onedigitpay-cron.php';
+	}
+	if ( class_exists( 'WC_OneDigitPay_Cron' ) ) {
+		WC_OneDigitPay_Cron::unschedule();
+	}
+}
+
+register_activation_hook( __FILE__, 'onedigitpay_woocommerce_activate' );
+register_deactivation_hook( __FILE__, 'onedigitpay_woocommerce_deactivate' );
