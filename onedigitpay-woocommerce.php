@@ -97,41 +97,65 @@ function onedigitpay_woocommerce_enqueue_inline_sdk() {
 	(function() {
 		if (typeof jQuery === 'undefined') return;
 
-		jQuery(document.body).on('checkout_error', function() {
-			// WooCommerce fires this on error; nothing to do.
-		});
+		var openedBySession = {};
+		var openingInProgress = false;
 
-		// Override the default WooCommerce checkout success handler.
-		var origSuccess = null;
-		jQuery(document).ajaxComplete(function(event, xhr, settings) {
-			if (!settings.url || settings.url.indexOf('wc-ajax=checkout') === -1) return;
-
-			var data;
-			try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
-
-			if (!data || data.result !== 'success' || !data.odp_inline) return;
-
-			// Prevent WooCommerce from redirecting.
-			if (data.redirect === false || data.redirect === '') {
-				// WC will try to redirect to empty string; override xhr response.
+		function parseCheckoutResponse(xhr) {
+			if (!xhr) return null;
+			if (xhr.responseJSON) return xhr.responseJSON;
+			if (!xhr.responseText) return null;
+			try {
+				return JSON.parse(xhr.responseText);
+			} catch (e) {
+				return null;
 			}
+		}
 
-			// Open the OneDigitPay popup, or fall back to redirect if SDK failed to load.
+		function openInlineCheckout(data) {
+			if (!data || !data.odp_session_id) return false;
+			if (openingInProgress || openedBySession[data.odp_session_id]) return true;
+
 			if (typeof OneDigitPay !== 'undefined' && typeof OneDigitPay.open === 'function') {
+				openingInProgress = true;
+				openedBySession[data.odp_session_id] = true;
+
 				OneDigitPay.open({
 					sessionId: data.odp_session_id,
 					apiBase: data.odp_api_base,
-					onSuccess: function(result) {
-						window.location.href = data.odp_thank_you_url;
+					onSuccess: function() {
+						// Finalize order first (WC-API return handler verifies and marks paid),
+						// then gateway redirects customer to the standard thank-you page.
+						if (data.odp_finalize_url) {
+							window.location.href = data.odp_finalize_url;
+							return;
+						}
+						if (data.odp_thank_you_url) {
+							window.location.href = data.odp_thank_you_url;
+						}
 					},
 					onClose: function() {
-						// Order stays on-hold; cron will resolve.
+						openingInProgress = false;
 					},
 					onError: function(err) {
+						openingInProgress = false;
 						console.error('OneDigitPay error:', err);
 					}
 				});
-			} else {
+				return true;
+			}
+
+			return false;
+		}
+
+		jQuery(document).ajaxComplete(function(event, xhr, settings) {
+			if (!settings.url || settings.url.indexOf('wc-ajax=checkout') === -1) return;
+
+			var data = parseCheckoutResponse(xhr);
+
+			if (!data || data.result !== 'success' || !data.odp_inline) return;
+
+			// Open the OneDigitPay popup, or fall back to redirect if SDK failed to load.
+			if (!openInlineCheckout(data)) {
 				// SDK not available (CDN blocked, CSP, ad-blocker, etc.) — fall back to redirect mode.
 				if (data.odp_pending_url) {
 					window.location.href = data.odp_pending_url;

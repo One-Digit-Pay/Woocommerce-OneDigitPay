@@ -193,7 +193,7 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 
 		$payment_mode = $this->get_option( 'payment_mode', 'redirect' );
 
-	if ( 'inline' === $payment_mode ) {
+		if ( 'inline' === $payment_mode ) {
 			// Build the redirect-mode pending URL as a fallback if the SDK fails to load.
 			$pending_fallback_url = add_query_arg(
 				array(
@@ -204,13 +204,18 @@ class WC_Gateway_OneDigitPay extends WC_Payment_Gateway {
 				home_url( '/' )
 			);
 
+			// Return handler URL forces immediate status verification and order finalization.
+			$finalize_url = $this->get_return_url_for_order( $order );
+
 			// Inline mode: return session ID so checkout JS can open the popup.
 			return array(
 				'result'               => 'success',
-				'redirect'             => false,
+				// Always provide a string redirect URL for WooCommerce core compatibility.
+				'redirect'             => wc_get_checkout_url() . '#odp-inline',
 				'odp_inline'           => true,
 				'odp_session_id'       => $result['session_id'],
 				'odp_api_base'         => $api_base,
+				'odp_finalize_url'     => $finalize_url,
 				'odp_thank_you_url'    => $this->get_return_url( $order ),
 				'odp_pending_url'      => $pending_fallback_url,
 				'odp_order_id'         => $order->get_id(),
